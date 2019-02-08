@@ -1,0 +1,170 @@
+CRD and Custom Controller
+
+Architecture Looks something like this:
+https://github.com/kubernetes/sample-controller/blob/master/docs/controller-client-go.md￼
+
+Best Reference:
+https://github.com/kubernetes/sample-controller
+
+kubectl get customresourcedefinition
+NAME                           CREATED AT
+foos.samplecontroller.k8s.io   2019-02-08T09:34:12Z
+
+kubectl edit customresourcedefinition foos.samplecontroller.k8s.io
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  creationTimestamp: "2019-02-08T09:34:12Z"
+  generation: 1
+  name: foos.samplecontroller.k8s.io
+  resourceVersion: "14704"
+  selfLink: /apis/apiextensions.k8s.io/v1beta1/customresourcedefinitions/foos.samplecontroller.k8s.io
+  uid: b18c63e7-2b84-11e9-82d4-080027e3eac4
+spec:
+  group: samplecontroller.k8s.io
+  names:
+    kind: Foo
+    listKind: FooList
+    plural: foos
+    singular: foo
+  scope: Namespaced
+  version: v1alpha1
+status:
+  acceptedNames:
+    kind: Foo
+    listKind: FooList
+    plural: foos
+    singular: foo
+  conditions:
+  - lastTransitionTime: "2019-02-08T09:34:12Z"
+    message: no conflicts found
+    reason: NoConflicts
+    status: "True"
+    type: NamesAccepted
+  - lastTransitionTime: "2019-02-08T09:34:12Z"
+    message: the initial names have been accepted
+    reason: InitialNamesAccepted
+    status: "True"
+    type: Established
+
+Custom Resource Object
+
+kubectl get foo
+NAME          CREATED AT
+example-foo   1h
+
+kubectl edit foo example-foo
+apiVersion: samplecontroller.k8s.io/v1alpha1
+kind: Foo
+metadata:
+  clusterName: ""
+  creationTimestamp: "2019-02-08T09:34:21Z"
+  generation: 1
+  name: example-foo
+  namespace: default
+  resourceVersion: "15765"
+  selfLink: /apis/samplecontroller.k8s.io/v1alpha1/namespaces/default/foos/example-foo
+  uid: b6a8861b-2b84-11e9-82d4-080027e3eac4
+spec:
+  deploymentName: example-foo
+  replicas: 1
+status:
+  availableReplicas: 1
+
+
+Custom Controller
+
+kubectl get deployment
+NAME          DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+example-foo   1         1         1            1           1h
+
+kubectl edit deployment 
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+  creationTimestamp: "2019-02-08T09:49:34Z"
+  generation: 1
+  name: example-foo
+  namespace: default
+  ownerReferences:
+  - apiVersion: samplecontroller.k8s.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Foo
+    name: example-foo
+    uid: b6a8861b-2b84-11e9-82d4-080027e3eac4
+  resourceVersion: "15764"
+  selfLink: /apis/extensions/v1beta1/namespaces/default/deployments/example-foo
+  uid: d7331f42-2b86-11e9-82d4-080027e3eac4
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: nginx
+      controller: example-foo
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: nginx
+        controller: example-foo
+    spec:
+      containers:
+      - image: nginx:latest
+        imagePullPolicy: Always
+        name: nginx
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+
+Validating a CRD (This is needed to restrict user from creating a invalid configuration)
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: crontabs.stable.example.com
+spec:
+  group: stable.example.com
+  versions:
+    - name: v1
+      served: true
+      storage: true
+  version: v1
+  scope: Namespaced
+  names:
+    plural: crontabs
+    singular: crontab
+    kind: CronTab
+    shortNames:
+    - ct
+  validation:
+   # openAPIV3Schema is the schema for validating custom objects.
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            cronSpec:
+              type: string
+              pattern: '^(\d+|\*)(/\d+)?(\s+(\d+|\*)(/\d+)?){4}$'
+            replicas:
+              type: integer
+              minimum: 1
+              maximum: 10
+
+
+
+
+
